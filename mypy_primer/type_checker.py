@@ -77,8 +77,17 @@ async def setup_pyright(
         repo = "https://github.com/microsoft/pyright"
     repo_dir = await ensure_repo_at_revision(repo, pyright_dir, revision_like)
 
-    await run(["./pw", "pdm", "install"], cwd=repo_dir)
-
+    error = None
+    for attempt in range(3):
+        try:
+            await run(["./pw", "pdm", "install"], cwd=repo_dir)
+        except CalledProcessError as e:
+            error = e
+        else:
+            break
+    else:
+        print(f"failed to install basedpyright after {attempt} attempts")
+        raise e
     pyright_exe = repo_dir / "packages" / "pyright" / "index.js"
     assert pyright_exe.exists()
     return pyright_exe
