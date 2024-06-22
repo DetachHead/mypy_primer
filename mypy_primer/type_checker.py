@@ -81,7 +81,7 @@ async def setup_pyright(
     for attempt in range(3):
         try:
             await run(["./pw", "pdm", "install"], cwd=repo_dir)
-        except CalledProcessError as e:
+        except subprocess.CalledProcessError as e:
             error = e
         else:
             break
