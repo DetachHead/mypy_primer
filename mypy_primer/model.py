@@ -27,7 +27,7 @@ class Project:
     mypy_cmd: str
     pyright_cmd: str | None
 
-    pip_cmd: str | None = None
+    install_cmd: str | None = None
     deps: list[str] | None = None
     needs_mypy_plugins: bool = False
 
@@ -54,8 +54,8 @@ class Project:
             result += f", name_override={self.name_override!r}"
         if self.pyright_cmd:
             result += f", pyright_cmd={self.pyright_cmd!r}"
-        if self.pip_cmd:
-            result += f", pip_cmd={self.pip_cmd!r}"
+        if self.install_cmd:
+            result += f", install_cmd={self.install_cmd!r}"
         if self.deps:
             result += f", deps={self.deps!r}"
         if self.needs_mypy_plugins:
@@ -119,11 +119,19 @@ class Project:
             )
         assert repo_dir == ctx.get().projects_dir / self.name
         await self.venv.make_venv()
-        if self.pip_cmd:
-            assert "{pip}" in self.pip_cmd
+        if self.install_cmd:
+            assert "{install}" in self.install_cmd
             try:
+                if has_uv():
+                    install_cmd = self.install_cmd.format(
+                        install=f"uv pip install --python {quote_path(self.venv.python)}"
+                    )
+                else:
+                    install_cmd = self.install_cmd.format(
+                        install=f"{quote_path(self.venv.python)} -m pip install"
+                    )
                 await run(
-                    self.pip_cmd.format(pip=quote_path(self.venv.script("pip"))),
+                    install_cmd,
                     shell=True,
                     cwd=repo_dir,
                     output=True,
@@ -168,11 +176,11 @@ class Project:
         return mypy_cmd
 
     async def run_mypy(self, mypy: Path, typeshed_dir: Path | None) -> TypeCheckResult:
-        additional_flags = ctx.get().additional_flags.copy()
         env = os.environ.copy()
         env["MYPY_FORCE_COLOR"] = "1"
 
         mypy_path = []  # TODO: this used to be exposed, could be useful to expose it again
+        additional_flags = ctx.get().additional_flags.copy()
         if typeshed_dir is not None:
             additional_flags.append(f"--custom-typeshed-dir={quote_path(typeshed_dir)}")
             mypy_path += list(map(str, typeshed_dir.glob("stubs/*")))
@@ -233,11 +241,11 @@ class Project:
         return pyright_cmd
 
     async def run_pyright(self, pyright: Path, typeshed_dir: Path | None) -> TypeCheckResult:
-        additional_flags: list[str] = []
+        additional_flags = ctx.get().additional_flags.copy()
         if typeshed_dir is not None:
             additional_flags.append(f"--typeshedpath {quote_path(typeshed_dir)}")
         pyright_cmd = self.get_pyright_cmd(pyright, additional_flags)
-        pyright_cmd = f"{self.venv.activate}; {pyright_cmd}"
+        pyright_cmd = f"source {self.venv.activate}; {pyright_cmd}"
         proc, runtime = await run(
             pyright_cmd,
             shell=True,
