@@ -1196,7 +1196,7 @@ def get_projects() -> list[Project]:
             location="https://github.com/detachhead/pytest-robotframework",
             mypy_cmd="{mypy} -p pytest_robotframework",
             pyright_cmd="{pyright}",
-            pip_cmd="{pip} install .",
+            install_cmd="{install} -e .",
         ),
         Project(
             location="https://github.com/mhammond/pywin32",
