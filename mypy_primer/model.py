@@ -8,6 +8,7 @@ import shlex
 import shutil
 import string
 import subprocess
+import sys
 import textwrap
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -26,14 +27,14 @@ class Project:
 
     mypy_cmd: str
     pyright_cmd: str | None
+    paths: list[str] | None = None
 
     install_cmd: str | None = None
     deps: list[str] | None = None
     needs_mypy_plugins: bool = False
 
-    # if expected_success, there is a recent version of mypy which passes cleanly
-    expected_mypy_success: bool = False
-    expected_pyright_success: bool = False
+    # if expected_success, there is a recent version of type checker which passes cleanly
+    expected_success: tuple[str, ...] = ()
 
     # cost is vaguely proportional to type check time
     # for mypy we use the compiled times
@@ -54,16 +55,16 @@ class Project:
             result += f", name_override={self.name_override!r}"
         if self.pyright_cmd:
             result += f", pyright_cmd={self.pyright_cmd!r}"
+        if self.paths:
+            result += f", paths={self.paths!r}"
         if self.install_cmd:
             result += f", install_cmd={self.install_cmd!r}"
         if self.deps:
             result += f", deps={self.deps!r}"
         if self.needs_mypy_plugins:
             result += f", needs_mypy_plugins={self.needs_mypy_plugins!r}"
-        if self.expected_mypy_success:
-            result += f", expected_mypy_success={self.expected_mypy_success!r}"
-        if self.expected_pyright_success:
-            result += f", expected_pyright_success={self.expected_pyright_success!r}"
+        if self.expected_success:
+            result += f", expected_success={self.expected_success!r}"
         if self.cost:
             result += f", cost={self.cost!r}"
         if self.revision:
@@ -84,14 +85,6 @@ class Project:
     @property
     def venv(self) -> Venv:
         return Venv(ctx.get().projects_dir / f"_{self.name}_venv")
-
-    def expected_success(self, type_checker: str) -> bool:
-        if type_checker == "mypy":
-            return self.expected_mypy_success
-        elif type_checker == "pyright":
-            return self.expected_pyright_success
-        else:
-            raise ValueError(f"unknown type checker {type_checker}")
 
     def cost_for_type_checker(self, type_checker: str) -> int:
         default_cost = 5
@@ -137,12 +130,7 @@ class Project:
                     install_cmd = self.install_cmd.format(
                         install=f"{quote_path(self.venv.python)} -m pip install"
                     )
-                await run(
-                    install_cmd,
-                    shell=True,
-                    cwd=repo_dir,
-                    output=True,
-                )
+                await run(install_cmd, shell=True, cwd=repo_dir, output=True)
             except subprocess.CalledProcessError as e:
                 if e.output:
                     print(e.output)
@@ -167,7 +155,7 @@ class Project:
     def get_mypy_cmd(self, mypy: str | Path, additional_flags: Sequence[str] = ()) -> str:
         mypy_cmd = self.mypy_cmd
         assert "{mypy}" in self.mypy_cmd
-        mypy_cmd = mypy_cmd.format(mypy=mypy)
+        mypy_cmd = mypy_cmd.format_map(_FormatMap(mypy=mypy, paths=self.paths))
 
         python_exe = self.venv.python
         mypy_cmd += f" --python-executable={quote_path(python_exe)}"
@@ -241,7 +229,11 @@ class Project:
             output = re.sub('File ".*/mypy', 'File "', output)
 
         return TypeCheckResult(
-            mypy_cmd, output, not bool(proc.returncode), self.expected_mypy_success, runtime
+            mypy_cmd,
+            output=output,
+            success=not bool(proc.returncode),
+            expected_success="mypy" in self.expected_success,
+            runtime=runtime,
         )
 
     def get_pyright_cmd(self, pyright: Path, additional_flags: Sequence[str] = ()) -> str:
@@ -249,7 +241,11 @@ class Project:
         assert "{pyright}" in pyright_cmd
         if additional_flags:
             pyright_cmd += " " + " ".join(additional_flags)
-        pyright_cmd = pyright_cmd.format(pyright=pyright)
+
+        pyright_cmd = pyright_cmd.format_map(
+            _FormatMap(pyright=f"node {pyright}", paths=self.paths)
+        )
+
         return pyright_cmd
 
     async def run_pyright(
@@ -263,7 +259,10 @@ class Project:
             env["MYPY_PRIMER_PREPEND_PATH"] = str(prepend_path)
 
         pyright_cmd = self.get_pyright_cmd(pyright, additional_flags)
-        pyright_cmd = f"source {self.venv.activate}; {pyright_cmd}"
+        if sys.platform == "win32":
+            pyright_cmd = f"{self.venv.activate_cmd} && {pyright_cmd}"
+        else:
+            pyright_cmd = f"{self.venv.activate_cmd}; {pyright_cmd}"
         proc, runtime = await run(
             pyright_cmd,
             shell=True,
@@ -277,7 +276,11 @@ class Project:
 
         output = proc.stderr + proc.stdout
         return TypeCheckResult(
-            pyright_cmd, output, not bool(proc.returncode), self.expected_pyright_success, runtime
+            pyright_cmd,
+            output=output,
+            success=not bool(proc.returncode),
+            expected_success="pyright" in self.expected_success,
+            runtime=runtime,
         )
 
     async def run_typechecker(
@@ -325,7 +328,12 @@ for source in sources:
             output=True,
             cwd=ctx.get().projects_dir / self.name,
             shell=True,
+            check=False,
         )
+        if proc.returncode:
+            if ctx.get().debug:
+                debug_print(f"{Style.BLUE}failed to find source paths for {self.name}{Style.RESET}")
+            return []
         return [ctx.get().projects_dir / self.name / p for p in proc.stdout.splitlines()]
 
     @classmethod
@@ -339,6 +347,21 @@ for source in sources:
         return Project(
             location=location, mypy_cmd=f"{{mypy}} {location} {additional_flags}", pyright_cmd=None
         )
+
+
+class _FormatMap:
+    def __init__(self, **map: str | Path | list[str] | None) -> None:
+        self.map = map
+
+    def __getitem__(self, key: str) -> str | Path:
+        if key not in self.map:
+            raise KeyError(key)
+        value = self.map[key]
+        if value is None:
+            raise ValueError(f"Required {key} to be specified")
+        if isinstance(value, list):
+            value = " ".join(value)
+        return value
 
 
 @dataclass(frozen=True)
