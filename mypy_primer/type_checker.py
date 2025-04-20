@@ -92,7 +92,7 @@ async def setup_pyright(
     error = None
     for attempt in range(3):
         try:
-            await run(["./pw", "uv", "sync"], cwd=repo_dir, output=True)
+            await run(["uv", "sync"], cwd=repo_dir, output=True)
         except subprocess.CalledProcessError as e:
             print(e.stderr)
             error = e
