@@ -94,6 +94,7 @@ async def setup_pyright(
         try:
             await run(["./pw", "uv", "sync"], cwd=repo_dir, output=True)
         except subprocess.CalledProcessError as e:
+            print(e.stderr)
             error = e
         else:
             break
