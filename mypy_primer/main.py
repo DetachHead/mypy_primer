@@ -8,7 +8,7 @@ import sys
 import traceback
 from dataclasses import replace
 from pathlib import Path
-from typing import Awaitable, Callable, Iterator, TypeVar
+from typing import Any, Awaitable, Callable, Iterator, TypeVar
 
 from mypy_primer.git_utils import (
     RevisionLike,
@@ -18,36 +18,73 @@ from mypy_primer.git_utils import (
 from mypy_primer.globals import _Args, parse_options_and_set_ctx
 from mypy_primer.model import Project, TypeCheckResult
 from mypy_primer.projects import get_projects
-from mypy_primer.type_checker import setup_mypy, setup_pyright, setup_typeshed
+from mypy_primer.type_checker import (
+    setup_knot,
+    setup_mypy,
+    setup_pyrefly,
+    setup_pyright,
+    setup_typeshed,
+)
 from mypy_primer.utils import Style, debug_print, get_npm, line_count, run, strip_colour_code
 
 T = TypeVar("T")
 
 
-def setup_type_checker(ARGS: _Args, *, revision_like: RevisionLike, suffix: str) -> Awaitable[Path]:
+def setup_type_checker(
+    ARGS: _Args,
+    *,
+    revision_like: RevisionLike,
+    suffix: str,
+    typeshed_dir: Path | None,
+) -> Awaitable[Path]:
     setup_fn: Callable[..., Awaitable[Path]]
+    kwargs: dict[str, Any]
+
     if ARGS.type_checker == "mypy":
         setup_fn = setup_mypy
-        arg_names = ["repo", "mypyc_compile_level"]
+        kwargs = {"repo": ARGS.repo, "mypyc_compile_level": ARGS.mypyc_compile_level}
     elif ARGS.type_checker == "pyright":
         setup_fn = setup_pyright
-        arg_names = ["repo"]
+        kwargs = {"repo": ARGS.repo}
+    elif ARGS.type_checker == "knot":
+        setup_fn = setup_knot
+        kwargs = {"repo": ARGS.repo}
+    elif ARGS.type_checker == "pyrefly":
+        return setup_pyrefly(
+            ARGS.base_dir / f"{ARGS.type_checker}_{suffix}",
+            revision_like=revision_like,
+            repo=ARGS.repo,
+            typeshed_dir=typeshed_dir,
+        )
     else:
         raise ValueError(f"Unknown type checker {ARGS.type_checker}")
 
-    kwargs = {arg_name: getattr(ARGS, arg_name) for arg_name in arg_names}
     return setup_fn(
         ARGS.base_dir / f"{ARGS.type_checker}_{suffix}", revision_like=revision_like, **kwargs
     )
 
 
-async def setup_new_and_old_type_checker(ARGS: _Args) -> tuple[Path, Path]:
+async def setup_new_and_old_type_checker(
+    ARGS: _Args,
+    new_typeshed_dir: Path | None,
+    old_typeshed_dir: Path | None,
+) -> tuple[Path, Path]:
     new_revision = ARGS.new
     old_revision = revision_or_recent_tag_fn(ARGS.old)
 
     new_exe, old_exe = await asyncio.gather(
-        setup_type_checker(ARGS, revision_like=new_revision, suffix="new"),
-        setup_type_checker(ARGS, revision_like=old_revision, suffix="old"),
+        setup_type_checker(
+            ARGS,
+            revision_like=new_revision,
+            suffix="new",
+            typeshed_dir=new_typeshed_dir,
+        ),
+        setup_type_checker(
+            ARGS,
+            revision_like=old_revision,
+            suffix="old",
+            typeshed_dir=old_typeshed_dir,
+        ),
     )
 
     if ARGS.debug:
@@ -97,8 +134,14 @@ def select_projects(ARGS: _Args) -> list[Project]:
         for p in get_projects()
         if not (p.min_python_version and sys.version_info < p.min_python_version)
     )
+
+    if ARGS.type_checker == "mypy":
+        project_iter = iter(p for p in project_iter if p.mypy_cmd is not None)
     if ARGS.type_checker == "pyright":
         project_iter = iter(p for p in project_iter if p.pyright_cmd is not None)
+    # if ARGS.type_checker == "knot":
+    #     project_iter = iter(p for p in project_iter if p.knot_cmd is not None)
+
     if ARGS.project_selector:
         project_iter = iter(
             p for p in project_iter if re.search(ARGS.project_selector, p.location, flags=re.I)
@@ -148,7 +191,12 @@ async def validate_expected_success(ARGS: _Args) -> None:
 
     recent_type_checker_exes = await asyncio.gather(
         *[
-            setup_type_checker(ARGS, revision_like=recent_type_checker, suffix=recent_type_checker)
+            setup_type_checker(
+                ARGS,
+                revision_like=recent_type_checker,
+                suffix=recent_type_checker,
+                typeshed_dir=None,
+            )
             for recent_type_checker in RECENT_VERSIONS[ARGS.type_checker]
         ]
     )
@@ -188,6 +236,7 @@ async def measure_project_runtimes(ARGS: _Args) -> None:
         ARGS,
         revision_like=ARGS.new or RECENT_VERSIONS[ARGS.type_checker][0],
         suffix="timer_" + (ARGS.new if ARGS.new else ""),
+        typeshed_dir=None,
     )
 
     async def inner(project: Project) -> tuple[float, Project]:
@@ -301,7 +350,12 @@ async def bisect(ARGS: _Args) -> None:
 async def coverage(ARGS: _Args) -> None:
     assert ARGS.type_checker == "mypy"
 
-    mypy_exe = await setup_type_checker(ARGS, revision_like=ARGS.new, suffix="new")
+    mypy_exe = await setup_type_checker(
+        ARGS,
+        revision_like=ARGS.new,
+        suffix="new",
+        typeshed_dir=None,
+    )
 
     projects = select_projects(ARGS)
     if sys.platform == "win32":
@@ -333,8 +387,12 @@ async def coverage(ARGS: _Args) -> None:
 async def primer(ARGS: _Args) -> int:
     projects = select_projects(ARGS)
 
-    new_type_checker, old_type_checker = await setup_new_and_old_type_checker(ARGS)
     new_typeshed_dir, old_typeshed_dir = await setup_new_and_old_typeshed(ARGS)
+    new_type_checker, old_type_checker = await setup_new_and_old_type_checker(
+        ARGS,
+        new_typeshed_dir=new_typeshed_dir,
+        old_typeshed_dir=old_typeshed_dir,
+    )
 
     results = [
         project.primer_result(

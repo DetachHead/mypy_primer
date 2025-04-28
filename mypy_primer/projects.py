@@ -547,7 +547,7 @@ def get_projects() -> list[Project]:
         ),
         Project(
             location="https://github.com/pytorch/vision",
-            mypy_cmd="{mypy}",
+            mypy_cmd=None,  # "{mypy}",
             pyright_cmd="{pyright}",
             deps=["numpy", "pillow"],
             cost={"pyright": 50},
@@ -1509,6 +1509,13 @@ def get_projects() -> list[Project]:
             paths=["pyproject_metadata"],
             deps=["packaging"],
             expected_success=("pyright",),
+        ),
+        Project(
+            location="https://github.com/strawberry-graphql/strawberry",
+            mypy_cmd="{mypy} {paths} --config-file=",
+            pyright_cmd="{pyright} {paths}",
+            paths=["strawberry"],
+            deps=["graphql-core", "python-dateutil", "packaging"],
         ),
     ]
     assert len(projects) == len({p.name for p in projects})
