@@ -63,14 +63,6 @@ def update_projects(projects: list[Project], check: bool = False) -> None:
 
 
 def get_projects() -> list[Project]:
-    # See https://github.com/hauntsaninja/mypy_primer/issues/112
-    # Project(
-    #     location="https://github.com/ZettaAI/zetta_utils",
-    #     mypy_cmd="{mypy} .",
-    #     install_cmd="{install} types-Pillow types-cachetools types-requests attrs",
-    #     expected_success=("mypy",),
-    #     supported_platforms=["linux", "darwin"],
-    # ),
     projects = [
         Project(
             location="https://github.com/python/mypy",
@@ -651,7 +643,7 @@ def get_projects() -> list[Project]:
         ),
         Project(
             location="https://github.com/ilevkivskyi/com2ann",
-            mypy_cmd="{mypy} --python-version=3.8 src/com2ann.py src/test_com2ann.py",
+            mypy_cmd="{mypy} --python-version=3.9 src/com2ann.py src/test_com2ann.py",
             pyright_cmd="{pyright}",
             expected_success=("mypy",),
             cost={"mypy": 7},
@@ -875,7 +867,7 @@ def get_projects() -> list[Project]:
             location="https://github.com/PyCQA/flake8-pyi",
             mypy_cmd="{mypy} {paths}",
             pyright_cmd="{pyright} {paths}",
-            paths=["pyi.py"],
+            paths=["flake8_pyi"],
             deps=["types-pyflakes"],
             expected_success=("mypy", "pyright"),
             cost={"mypy": 6},
@@ -1508,7 +1500,7 @@ def get_projects() -> list[Project]:
             pyright_cmd="{pyright} {paths}",
             paths=["colour"],
             deps=["matplotlib", "numpy", "pandas-stubs", "pytest", "scipy-stubs"],
-            cost={"mypy": 2, "pyright": 180},
+            cost={"mypy": 800, "pyright": 180},
         ),
         Project(
             location="https://github.com/vega/altair",
@@ -1599,6 +1591,32 @@ def get_projects() -> list[Project]:
             paths=["."],
             deps=["cryptography", "pydantic", "pytest"],
             cost={"mypy": 24},
+        ),
+        Project(
+            location="https://github.com/scikit-build/scikit-build-core",
+            mypy_cmd="{mypy} {paths}",
+            pyright_cmd="{pyright} {paths}",
+            paths=["src", "tests", "noxfile.py"],
+            deps=[
+                "build",
+                "cattrs",
+                "cmake",
+                "exceptiongroup",
+                "hatch-fancy-pypi-readme",
+                "importlib-resources",
+                "markdown-it-py",
+                "ninja",
+                "nox",
+                "orjson",
+                "packaging",
+                "pytest",
+                "pytest-subprocess",
+                "rich",
+                "setuptools-scm",
+                "tomli",
+                "types-setuptools",
+            ],
+            cost={"mypy": 34},
         ),
     ]
     assert len(projects) == len({p.name for p in projects})
