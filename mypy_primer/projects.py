@@ -1016,7 +1016,7 @@ def get_projects() -> list[Project]:
             location="https://github.com/scipy/scipy",
             mypy_cmd="{mypy} scipy",
             pyright_cmd=None,
-            deps=["numpy", "pytest", "hypothesis", "types-psutil"],
+            deps=["numpy", "pytest", "hypothesis", "setuptools>=71.1", "types-psutil"],
             needs_mypy_plugins=True,
             cost={"mypy": 80},
         ),
@@ -1212,7 +1212,6 @@ def get_projects() -> list[Project]:
             location="https://github.com/psycopg/psycopg",
             mypy_cmd="{mypy}",
             pyright_cmd="{pyright}",
-            ty_cmd="""{ty} check --config 'src.root="./psycopg"'""",
             deps=["pytest", "pproxy"],
             cost={"mypy": 28},
         ),
@@ -1617,6 +1616,14 @@ def get_projects() -> list[Project]:
                 "types-setuptools",
             ],
             cost={"mypy": 34},
+        ),
+        Project(
+            location="https://github.com/hynek/svcs",
+            mypy_cmd="{mypy} {paths}",
+            pyright_cmd="{pyright} {paths}",
+            paths=["src", "tests/typing"],
+            deps=["attrs", "flask", "aiohttp", "fastapi", "starlette"],
+            expected_success=("mypy", "pyright"),
         ),
     ]
     assert len(projects) == len({p.name for p in projects})
