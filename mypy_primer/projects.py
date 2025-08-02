@@ -1499,7 +1499,7 @@ def get_projects() -> list[Project]:
             pyright_cmd="{pyright} {paths}",
             paths=["colour"],
             deps=["matplotlib", "numpy", "pandas-stubs", "pytest", "scipy-stubs"],
-            cost={"mypy": 800, "pyright": 180},
+            cost={"mypy": 1500, "pyright": 180},
         ),
         Project(
             location="https://github.com/vega/altair",
@@ -1592,6 +1592,13 @@ def get_projects() -> list[Project]:
             cost={"mypy": 24},
         ),
         Project(
+            location="https://github.com/zopefoundation/zope.interface",
+            mypy_cmd="{mypy} {paths}",
+            pyright_cmd="{pyright} {paths}",
+            paths=["src"],
+            deps=["zope.testing"],
+        ),
+        Project(
             location="https://github.com/scikit-build/scikit-build-core",
             mypy_cmd="{mypy} {paths}",
             pyright_cmd="{pyright} {paths}",
@@ -1624,6 +1631,13 @@ def get_projects() -> list[Project]:
             paths=["src", "tests/typing"],
             deps=["attrs", "flask", "aiohttp", "fastapi", "starlette"],
             expected_success=("mypy", "pyright"),
+        ),
+        Project(
+            location="https://github.com/glyph/DateType",
+            mypy_cmd="{mypy} {paths}",
+            pyright_cmd="{pyright} {paths}",
+            paths=["src"],
+            expected_success=("mypy",),
         ),
     ]
     assert len(projects) == len({p.name for p in projects})
