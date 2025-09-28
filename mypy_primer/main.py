@@ -19,6 +19,7 @@ from mypy_primer.globals import _Args, parse_options_and_set_ctx
 from mypy_primer.model import Project, TypeCheckResult
 from mypy_primer.projects import get_projects
 from mypy_primer.type_checker import (
+    RustBuildMode,
     setup_mypy,
     setup_pyrefly,
     setup_pyright,
@@ -42,16 +43,27 @@ def setup_type_checker(
 
     if ARGS.type_checker == "mypy":
         setup_fn = setup_mypy
-        kwargs = {"repo": ARGS.repo, "mypyc_compile_level": ARGS.mypyc_compile_level}
+        kwargs = {
+            "repo": ARGS.repo,
+            "mypyc_compile_level": ARGS.mypyc_compile_level,
+            "install_librt": ARGS.mypy_install_librt,
+        }
     elif ARGS.type_checker == "pyright":
         setup_fn = setup_pyright
         kwargs = {"repo": ARGS.repo}
     elif ARGS.type_checker == "ty":
         setup_fn = setup_ty
-        kwargs = {"repo": ARGS.repo}
+        kwargs = {
+            "repo": ARGS.repo,
+            "build_mode": (RustBuildMode.DEBUG if ARGS.debug_build else RustBuildMode.RELEASE),
+        }
     elif ARGS.type_checker == "pyrefly":
         setup_fn = setup_pyrefly
-        kwargs = {"repo": ARGS.repo, "typeshed_dir": typeshed_dir}
+        kwargs = {
+            "repo": ARGS.repo,
+            "typeshed_dir": typeshed_dir,
+            "build_mode": (RustBuildMode.DEBUG if ARGS.debug_build else RustBuildMode.RELEASE),
+        }
     else:
         raise ValueError(f"Unknown type checker {ARGS.type_checker}")
 
@@ -273,6 +285,7 @@ async def bisect(ARGS: _Args) -> None:
             repo=ARGS.repo,
             mypyc_compile_level=ARGS.mypyc_compile_level,
             editable=True,  # important
+            install_librt=ARGS.mypy_install_librt,
         )
         repo_dir = ARGS.base_dir / "bisect_mypy" / "mypy"
     elif ARGS.type_checker == "pyright":
