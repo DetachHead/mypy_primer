@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import enum
 import os
 import shutil
 import subprocess
@@ -9,6 +8,14 @@ from pathlib import Path
 
 from mypy_primer.git_utils import RevisionLike, ensure_repo_at_revision
 from mypy_primer.utils import Venv, get_npm, has_uv, run
+
+
+def _cargo_build_artifact_directory(build_profile: str) -> str:
+    """Return the cargo artifact directory name for a given build profile.
+
+    Cargo uses "debug" as the directory name for the "dev" profile.
+    """
+    return "debug" if build_profile == "dev" else build_profile
 
 
 async def setup_mypy(
@@ -139,7 +146,7 @@ async def setup_ty(
     ty_dir: Path,
     revision_like: RevisionLike,
     *,
-    build_mode: RustBuildMode,
+    build_profile: str,
     repo: str | None,
 ) -> Path:
     ty_dir.mkdir(parents=True, exist_ok=True)
@@ -155,7 +162,7 @@ async def setup_ty(
 
         try:
             await run(
-                ["cargo", "build", "--bin", "ty", *build_mode.flags()],
+                ["cargo", "build", "--bin", "ty", "--profile", build_profile],
                 cwd=repo_dir,
                 env=env,
                 output=True,
@@ -166,7 +173,7 @@ async def setup_ty(
             print(e.stderr, file=sys.stderr)
             raise e
 
-    ty_exe = cargo_target_dir / build_mode.artifact_directory() / "ty"
+    ty_exe = cargo_target_dir / _cargo_build_artifact_directory(build_profile) / "ty"
     assert ty_exe.exists()
     return ty_exe
 
@@ -175,7 +182,7 @@ async def setup_pyrefly(
     pyrefly_dir: Path,
     revision_like: RevisionLike,
     *,
-    build_mode: RustBuildMode,
+    build_profile: str,
     repo: str | None,
     typeshed_dir: Path | None,
 ) -> Path:
@@ -185,7 +192,9 @@ async def setup_pyrefly(
         repo = "https://github.com/facebook/pyrefly"
     repo_dir = await ensure_repo_at_revision(repo, pyrefly_dir, revision_like)
 
+    cargo_target_dir = pyrefly_dir / "target"
     env = os.environ.copy()
+    env["CARGO_TARGET_DIR"] = str(cargo_target_dir)
     if typeshed_dir is not None:
         if typeshed_dir.name != "typeshed":
             raise RuntimeError(f"Unexpected typeshed dir {typeshed_dir}")
@@ -194,7 +203,7 @@ async def setup_pyrefly(
     if not os.environ.get("MYPY_PRIMER_NO_REBUILD", False):
         try:
             await run(
-                ["cargo", "build", *build_mode.flags()],
+                ["cargo", "build", "--profile", build_profile],
                 cwd=repo_dir / "pyrefly",
                 env=env,
                 output=True,
@@ -205,7 +214,7 @@ async def setup_pyrefly(
             print(e.stderr, file=sys.stderr)
             raise e
 
-    pyrefly_exe = repo_dir / "target" / build_mode.artifact_directory() / "pyrefly"
+    pyrefly_exe = cargo_target_dir / _cargo_build_artifact_directory(build_profile) / "pyrefly"
     assert pyrefly_exe.exists()
     return pyrefly_exe
 
@@ -215,20 +224,3 @@ async def setup_typeshed(parent_dir: Path, *, repo: str, revision_like: Revision
         shutil.rmtree(parent_dir)
     parent_dir.mkdir(exist_ok=True)
     return await ensure_repo_at_revision(repo, parent_dir, revision_like)
-
-
-class RustBuildMode(enum.Enum):
-    RELEASE = "release"
-    DEBUG = "debug"
-
-    def flags(self) -> list[str]:
-        if self == RustBuildMode.RELEASE:
-            return ["--release"]
-        else:
-            return []
-
-    def artifact_directory(self) -> Path:
-        if self == RustBuildMode.RELEASE:
-            return Path("release")
-        else:
-            return Path("debug")
