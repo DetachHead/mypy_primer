@@ -727,13 +727,14 @@ def get_projects() -> list[Project]:
             expected_success=("mypy",),
             cost={"mypy": 9},
         ),
-        Project(
-            location="https://github.com/spack/spack",
-            mypy_cmd="{mypy} -p spack -p llnl",
-            pyright_cmd="{pyright}",
-            expected_success=("mypy",),
-            cost={"mypy": 65, "pyright": 100},
-        ),
+        # temporarily disabled due to https://github.com/DetachHead/basedpyright/issues/563
+        # Project(
+        #     location="https://github.com/spack/spack",
+        #     mypy_cmd="{mypy} -p spack -p llnl",
+        #     pyright_cmd="{pyright}",
+        #     expected_success=("mypy",),
+        #     cost={"mypy": 65, "pyright": 100},
+        # ),
         Project(
             location="https://github.com/johtso/httpx-caching",
             mypy_cmd="{mypy} {paths}",
@@ -857,15 +858,16 @@ def get_projects() -> list[Project]:
             expected_success=("mypy", "pyright"),
             cost={"mypy": 23},
         ),
-        Project(
-            location="https://github.com/sympy/sympy",
-            mypy_cmd="{mypy} {paths}",
-            pyright_cmd="{pyright} {paths}",
-            paths=["sympy"],
-            deps=["mpmath"],
-            expected_success=("mypy",),
-            cost={"mypy": 182, "pyright": 240},
-        ),
+        # temporarily disabled due to https://github.com/DetachHead/basedpyright/issues/563
+        # Project(
+        #     location="https://github.com/sympy/sympy",
+        #     mypy_cmd="{mypy} {paths}",
+        #     pyright_cmd="{pyright} {paths}",
+        #     paths=["sympy"],
+        #     deps=["mpmath"],
+        #     expected_success=("mypy",),
+        #     cost={"mypy": 182, "pyright": 240},
+        # ),
         Project(
             location="https://github.com/nion-software/nionutils",
             mypy_cmd="{mypy} --strict -p nion.utils --config-file=",
