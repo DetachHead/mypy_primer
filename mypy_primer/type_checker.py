@@ -136,6 +136,7 @@ async def setup_pyright(
             break
     else:
         print(f"failed to install basedpyright after {attempt + 1} attempts")
+        print(error.stderr)
         raise error
     pyright_exe = repo_dir / "packages" / "pyright" / "index.js"
     assert pyright_exe.exists()
