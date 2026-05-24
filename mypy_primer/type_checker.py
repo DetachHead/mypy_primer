@@ -129,7 +129,7 @@ async def setup_pyright(
     error = None
     for attempt in range(3):
         try:
-            await run(["./pw", "uv", "sync"], cwd=repo_dir, output=True)
+            await run(["./pw", "uv", "sync", "--reinstall-package", "basedpyright"], cwd=repo_dir, output=True)
         except subprocess.CalledProcessError as e:
             error = e
         else:
