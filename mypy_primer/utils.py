@@ -81,10 +81,9 @@ async def run(
 ) -> tuple[subprocess.CompletedProcess[str], float]:
     if output:
         kwargs["stdout"] = subprocess.PIPE
-        kwargs["stderr"] = subprocess.PIPE
     else:
         kwargs.setdefault("stdout", subprocess.DEVNULL)
-        kwargs.setdefault("stderr", subprocess.DEVNULL)
+    kwargs["stderr"] = subprocess.PIPE
 
     global _semaphore
     if _semaphore is None:
