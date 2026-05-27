@@ -13,6 +13,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from typing_extensions import override
+
 from mypy_primer.globals import ctx
 
 if sys.platform == "win32":
@@ -110,7 +112,7 @@ async def run(
     stderr = stderr_b.decode("utf-8") if stderr_b is not None else None
     assert proc.returncode is not None
     if check and proc.returncode:
-        raise subprocess.CalledProcessError(proc.returncode, cmd, output=stdout, stderr=stderr)
+        raise ProcessError(subprocess.CalledProcessError(proc.returncode, cmd, output=stdout, stderr=stderr))
     return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr), end_t - start_t
 
 
@@ -188,3 +190,13 @@ def get_npm() -> str:
         return Path(npm_path).name
     else:
         return "npm"
+
+
+class ProcessError(subprocess.CalledProcessError):
+    """better version of `CalledProcessError` that isn't completely useless"""
+    def __init__(self, wrapped: subprocess.CalledProcessError) -> None:
+        super().__init__(wrapped.returncode, wrapped.cmd, wrapped.output, wrapped.stderr)  # pyright: ignore[reportAny]
+
+    @override
+    def __str__(self) -> str:
+        return f"{super().__str__()}\nstderr:\n{self.stderr}"  # pyright: ignore[reportAny]

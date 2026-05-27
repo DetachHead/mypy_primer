@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from mypy_primer.git_utils import RevisionLike, ensure_repo_at_revision
-from mypy_primer.utils import Venv, get_npm, has_uv, run
+from mypy_primer.utils import ProcessError, Venv, get_npm, has_uv, run
 
 
 def _cargo_build_artifact_directory(build_profile: str) -> str:
@@ -136,8 +136,8 @@ async def setup_pyright(
             break
     else:
         print(f"failed to install basedpyright after {attempt + 1} attempts")
-        print(error.stderr)
-        raise error
+        assert error
+        raise ProcessError(error)
     pyright_exe = repo_dir / "packages" / "pyright" / "index.js"
     assert pyright_exe.exists()
     return pyright_exe
