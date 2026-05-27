@@ -6,7 +6,7 @@ from datetime import date
 from pathlib import Path
 from typing import Awaitable, Callable
 
-from mypy_primer.utils import run
+from mypy_primer.utils import ProcessError, run
 
 RevisionLike = str | None | Callable[[Path], Awaitable[str]]
 
@@ -73,12 +73,12 @@ async def ensure_repo_at_revision(
         except subprocess.CalledProcessError as e:
             # out of caution, be defensive about the error here
             if "not found" not in e.stderr:
-                raise
+                raise ProcessError(e)
 
         try:
             await checkout(revision, repo_dir)
             break
-        except subprocess.CalledProcessError:
+        except subprocess.CalledProcessError as e:
             # assume checkout failed due to having a shallow clone. try to unshallow our clone
             # and then retry
             if retry:
@@ -88,7 +88,7 @@ async def ensure_repo_at_revision(
                     ["git", "fetch", "--unshallow", "--all", "--tags"], cwd=repo_dir, check=False
                 )
                 continue
-            raise
+            raise ProcessError(e)
     return repo_dir
 
 
