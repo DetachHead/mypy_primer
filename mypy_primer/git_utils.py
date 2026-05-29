@@ -10,25 +10,27 @@ from mypy_primer.utils import ProcessError, run
 
 RevisionLike = str | None | Callable[[Path], Awaitable[str]]
 
+def _submodules_arg(submodules: bool):
+    return ['--recurse-submodules'] if submodules else []
 
 # repo_source could be a URL *or* a local path
-async def clone(repo_source: str, *, repo_dir: Path, cwd: Path, shallow: bool = False) -> None:
+async def clone(repo_source: str, *, repo_dir: Path, cwd: Path, shallow: bool = False, submodules: bool) -> None:
     if os.path.exists(repo_source):
         repo_source = os.path.abspath(repo_source)
-    cmd = ["git", "clone", "--recurse-submodules", repo_source, str(repo_dir)]
+    cmd = ["git", "clone", *_submodules_arg(submodules), repo_source, str(repo_dir)]
     if shallow:
         cmd += ["--depth", "1"]
     await run(cmd, cwd=cwd)
 
 
-async def refresh(repo_dir: Path) -> None:
+async def refresh(repo_dir: Path, *, submodules: bool) -> None:
     await run(["git", "fetch"], cwd=repo_dir)
     await run(["git", "clean", "-ffxd"], cwd=repo_dir)
-    await run(["git", "reset", "--hard", "origin/HEAD", "--recurse-submodules"], cwd=repo_dir)
+    await run(["git", "reset", "--hard", "origin/HEAD", *_submodules_arg(submodules)], cwd=repo_dir)
 
 
-async def checkout(revision: str, repo_dir: Path) -> None:
-    await run(["git", "checkout", "--force", "--recurse-submodules", revision], cwd=repo_dir)
+async def checkout(revision: str, repo_dir: Path, *, submodules: bool) -> None:
+    await run(["git", "checkout", "--force", *_submodules_arg(submodules), revision], cwd=repo_dir)
 
 
 async def get_revision_for_date(dt: date, repo_dir: Path) -> str:
@@ -48,16 +50,16 @@ async def get_revision_for_revision_or_date(revision: str, repo_dir: Path) -> st
 
 
 async def ensure_repo_at_revision(
-    repo_url: str, cwd: Path, revision_like: RevisionLike, *, name_override: str | None = None
+    repo_url: str, cwd: Path, revision_like: RevisionLike, *, name_override: str | None = None, submodules: bool = True
 ) -> Path:
     if name_override:
         repo_dir = cwd / name_override
     else:
         repo_dir = cwd / Path(repo_url).name
     if repo_dir.is_dir():
-        await refresh(repo_dir)
+        await refresh(repo_dir, submodules=submodules)
     else:
-        await clone(repo_url, repo_dir=repo_dir, cwd=cwd, shallow=revision_like is None)
+        await clone(repo_url, repo_dir=repo_dir, cwd=cwd, shallow=revision_like is None, submodules=submodules)
     assert repo_dir.is_dir(), f"{repo_dir} is not a directory"
 
     if revision_like is None:
@@ -68,7 +70,7 @@ async def ensure_repo_at_revision(
     for retry in (True, False):
         # checking out a local branch is probably not what we want, so preemptively delete
         try:
-            await checkout("origin/HEAD", repo_dir)
+            await checkout("origin/HEAD", repo_dir, submodules=submodules)
             await run(["git", "branch", "-D", revision], output=True, cwd=repo_dir)
         except subprocess.CalledProcessError as e:
             # out of caution, be defensive about the error here
@@ -76,7 +78,7 @@ async def ensure_repo_at_revision(
                 raise ProcessError(e)
 
         try:
-            await checkout(revision, repo_dir)
+            await checkout(revision, repo_dir, submodules=submodules)
             break
         except subprocess.CalledProcessError as e:
             # assume checkout failed due to having a shallow clone. try to unshallow our clone
