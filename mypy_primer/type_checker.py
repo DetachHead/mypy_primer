@@ -124,7 +124,8 @@ async def setup_pyright(
 
     if repo is None:
         repo = "https://github.com/microsoft/pyright"
-    repo_dir = await ensure_repo_at_revision(repo, pyright_dir, revision_like)
+    # basedpyright pins mypy_primer using a submodule which we don't want to re-clone
+    repo_dir = await ensure_repo_at_revision(repo, pyright_dir, revision_like, submodules=False)
 
     error = None
     for attempt in range(3):
