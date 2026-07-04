@@ -130,7 +130,8 @@ async def setup_pyright(
     error = None
     for attempt in range(3):
         try:
-            await run(["./pw", "uv", "sync", "--reinstall-package", "basedpyright"], cwd=repo_dir, output=True)
+            # need shell because gg.cmd doesn't work otherwise for some reason...
+            _ = await run("./gg.cmd uv sync --reinstall-package basedpyright", cwd=repo_dir, output=True, shell=True)
         except subprocess.CalledProcessError as e:
             error = e
         else:
